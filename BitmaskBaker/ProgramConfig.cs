@@ -19,4 +19,12 @@ internal class ProgramConfig
     public int cutX = 16;
     [DataField("CutY")]
     public int cutY = 16;
+    [DataField("Columns")]
+    public int colums = 8;
+    [DataField("PivotX")]
+    public float pivotX = 0.5f;
+    [DataField("PivotY")]
+    public float pivotY = 0.5f;
+    [DataField("PixelsPerUnit")]
+    public float pixelsPerUnit = 32.0f;
 }

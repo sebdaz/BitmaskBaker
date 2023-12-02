@@ -78,7 +78,7 @@ internal class Program
     public static ProgramConfig config = new();
     static void Main(string[] args)
     {
-        Console.WriteLine("Hello, World!");
+        Console.WriteLine("Starting bitmask baking!");
 
         Directory.CreateDirectory("input");
         Directory.CreateDirectory("output");
@@ -88,6 +88,8 @@ internal class Program
             JsonError error = new JsonError();
             node.LoadFile("config.json", error);
             config = JsonSerializer.Deserialize<ProgramConfig, ObjectSerializer>(null, node)!;
+            JsonNode savedNode = JsonSerializer.Serialize<ProgramConfig, ObjectSerializer>(config);
+            savedNode.SaveFile("config.json");
         }
         else
         {
@@ -102,8 +104,75 @@ internal class Program
         {
             ProcessInputImage(file);
         }
+        Console.WriteLine($"TASK DONE!!! Press any key to exit.");
+        Console.ReadKey();
+    }
+    public static void ProcessInputImage(string imagePath)
+    {
+        var fileName = Path.GetFileName(imagePath);
+        var bareName = Path.GetFileNameWithoutExtension(imagePath);
+        Console.WriteLine($"Processing {fileName}...");
+        string path = $"output/{bareName}";
+        Directory.CreateDirectory(path);
 
-        Console.ReadLine();
+        Image<Rgba32> image = Image.Load<Rgba32>(imagePath);
+
+        CornerImageSet cornerImages = SplitSourceImage(image);
+
+        List<IconStateMeta> iconStates = new();
+        List<Image<Rgba32>> imageList = new();
+
+        int imageIndex = 0;
+        for (int value = 0; value <= (int)BitDirection.ALL_DIRECTIONS; value++)
+        {
+            if (InvalidValue(value))
+            {
+                continue;
+            }
+            Image<Rgba32> NW = GetCornerImageForCorner(value, cornerImages, CornerType.NW);
+            Image<Rgba32> NE = GetCornerImageForCorner(value, cornerImages, CornerType.NE);
+
+            Image<Rgba32> SW = GetCornerImageForCorner(value, cornerImages, CornerType.SW); ;
+            Image<Rgba32> SE = GetCornerImageForCorner(value, cornerImages, CornerType.SE); ;
+
+            CornerImage compiledCorners = new CornerImage(NW, NE, SW, SE);
+
+            Image<Rgba32> valueResult = CombineImage(compiledCorners);
+            imageList.Add(valueResult);
+
+            iconStates.Add(new IconStateMeta($"{value}", false, false, new List<IconFrameMeta>() { new IconFrameMeta(imageIndex, 1.0f) }));
+            imageIndex++;
+        }
+        int imageAmount = imageList.Count;
+        int rows = (int)Math.Ceiling((float)imageAmount / (float)config.colums);
+
+        Image<Rgba32> finalImage = new Image<Rgba32>(config.colums * config.width, rows * config.height);
+        int imagesProcessed = 0;
+        for (int row = 0; row < rows; row++)
+        {
+            if (imagesProcessed >= imageList.Count)
+            {
+                break;
+            }
+            for (int column = 0; column < config.colums; column++)
+            {
+                if (imagesProcessed >= imageList.Count)
+                {
+                    break;
+                }
+                Image<Rgba32> iteratedImage = imageList[imagesProcessed];
+                ImprintImage(iteratedImage, finalImage, column * config.width, row * config.height);
+                imagesProcessed++;
+            }
+        }
+
+        finalImage.SaveAsPng($"{path}/image.png");
+
+        IconMeta meta = new IconMeta(bareName, config.width, config.height, config.pixelsPerUnit, config.pivotX, config.pivotY, iconStates);
+        JsonNode metaNode = JsonSerializer.Serialize<IconMeta, ObjectSerializer>(meta);
+        metaNode.SaveFile($"{path}/meta.json");
+
+        Console.WriteLine($"Finished!");
     }
 
     public static bool InvalidValueCheck(int value, BitDirection checkComp, BitDirection requisiteOne, BitDirection requisitTwo)
@@ -117,7 +186,6 @@ internal class Program
         }
         return false;
     }
-
     public static bool InvalidValue(int value)
     {
         if (InvalidValueCheck(value, BitDirection.NORTHEAST, BitDirection.NORTH, BitDirection.EAST))
@@ -171,39 +239,6 @@ internal class Program
                 return CornerEvaluation.NONE;
             }
         }
-    }
-
-    public static void ProcessInputImage(string imagePath)
-    {
-        var fileName = Path.GetFileName(imagePath);
-        var bareName = Path.GetFileNameWithoutExtension(imagePath);
-        Console.WriteLine($"Processing {fileName}");
-        string path = $"output/{bareName}";
-        Directory.CreateDirectory(path);
-
-        Image<Rgba32> image = Image.Load<Rgba32>(imagePath);
-
-        CornerImageSet cornerImages = SplitSourceImage(image);
-
-        for (int value = 0; value <= (int)BitDirection.ALL_DIRECTIONS; value++)
-        {
-            if (InvalidValue(value))
-            {
-                continue;
-            }
-            Image<Rgba32> NW = GetCornerImageForCorner(value, cornerImages, CornerType.NW);
-            Image<Rgba32> NE = GetCornerImageForCorner(value, cornerImages, CornerType.NE);
-
-            Image<Rgba32> SW = GetCornerImageForCorner(value, cornerImages, CornerType.SW); ;
-            Image<Rgba32> SE = GetCornerImageForCorner(value, cornerImages, CornerType.SE); ;
-
-            CornerImage compiledCorners = new CornerImage(NW, NE, SW, SE);
-
-            Image<Rgba32> valueResult = CombineImage(compiledCorners);
-            valueResult.SaveAsPng($"{path}/image{value}.png");
-        }
-
-        //someImage.SaveAsPng(path + "/image.png");
     }
     public static Image<Rgba32> GetCornerImageForCorner(int value, CornerImageSet cornerSet, CornerType type)
     {
@@ -269,36 +304,11 @@ internal class Program
         int cutX = config.cutX;
         int cutY = config.cutY;
 
-        for (int y = 0; y < config.height; y++)
-        {
-            for (int x = 0; x < config.width; x++)
-            {
-                Rgba32 pixel;
-                if (x < cutX)
-                {
-                    if (y < cutY)
-                    {
-                        pixel = cornerImage.NW[x, y];
-                    }
-                    else
-                    {
-                        pixel = cornerImage.SW[x, y - cutY];
-                    }
-                }
-                else
-                {
-                    if (y < cutY)
-                    {
-                        pixel = cornerImage.NE[x - cutX, y];
-                    }
-                    else
-                    {
-                        pixel = cornerImage.SE[x - cutX, y - cutY];
-                    }
-                }
-                newImage[x, y] = pixel;
-            }
-        }
+        ImprintImage(cornerImage.NW, newImage, 0, 0);
+        ImprintImage(cornerImage.NE, newImage, cutX, 0);
+        ImprintImage(cornerImage.SW, newImage, 0, cutY);
+        ImprintImage(cornerImage.SE, newImage, cutX, cutY);
+
         return newImage;
     }
     public static CornerImageSet SplitSourceImage(Image<Rgba32> image)
@@ -352,5 +362,18 @@ internal class Program
             }
         }
         return newImage;
+    }
+    public static void ImprintImage(Image<Rgba32> imprint, Image<Rgba32> image, int xPos, int yPos)
+    {
+        for (int y = 0; y < imprint.Height; y++)
+        {
+            for (int x = 0; x < imprint.Width; x++)
+            {
+                int imageXPos = xPos + x;
+                int imageYPos = yPos + y;
+
+                image[imageXPos, imageYPos] = imprint[x, y];
+            }
+        }
     }
 }
