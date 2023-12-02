@@ -1,0 +1,3 @@
+[submodule "AzSharp"]
+	path = AzSharp
+	url = https://github.com/sebdaz/AzSharp.git
