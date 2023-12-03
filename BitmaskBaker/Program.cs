@@ -313,11 +313,12 @@ internal class Program
     }
     public static CornerImageSet SplitSourceImage(Image<Rgba32> image)
     {
+        int width = config.width;
         CornerImage fullImage = CreateSplitImage(image, 0, 0);
-        CornerImage NSImage = CreateSplitImage(image, 32, 0);
-        CornerImage WEImage = CreateSplitImage(image, 64, 0);
-        CornerImage CornerImage = CreateSplitImage(image, 96, 0);
-        CornerImage wallImage = CreateSplitImage(image, 128, 0);
+        CornerImage NSImage = CreateSplitImage(image, width * 1, 0);
+        CornerImage WEImage = CreateSplitImage(image, width * 2, 0);
+        CornerImage CornerImage = CreateSplitImage(image, width * 3, 0);
+        CornerImage wallImage = CreateSplitImage(image, width * 4, 0);
 
         return new CornerImageSet(fullImage, NSImage, WEImage, CornerImage, wallImage);
     }
